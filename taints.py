@@ -340,8 +340,8 @@ def taint_expr__(expr, taint):
     taint.p('taint_expr', expr)
     return expr
 
-def taint_assign__(values, taint):
-    taint.p('taint_assign', values)
+def __t(values, taint):
+    taint.p('__t', values)
     return values
 
 def wrap_input(inputstr):

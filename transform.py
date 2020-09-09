@@ -4,8 +4,8 @@ import astor
 methods = []
 Epsilon = '-'
 NoEpsilon = '='
-TaintName = '__taint__'
-TaintAssign = '__tainted'
+TaintName = '__t__'
+TaintAssign = '__t'
 TaintWrap = 'taint_wrap__'
 TaintExpr = 'taint_expr__'
 TaintedMethod = 'tainted_method__'
@@ -28,17 +28,11 @@ class InRewriter(InRewriter):
             keywords=[])
         return mod_val
 
-def rewrite_in(src):
-    v = ast.fix_missing_locations(InRewriter().visit(ast.parse(src)))
-    source = astor.to_source(v)
-    return "%s" % source
-
 class Rewriter(InRewriter):
     def init_counters(self):
         self.if_counter = 0
         self.while_counter = 0
 
-class Rewriter(Rewriter):
     def wrap_in_method(self, body, args):
         method_name_expr = ast.Str(methods[-1])
         my_args = ast.List(args.args, ast.Load())
@@ -48,7 +42,6 @@ class Rewriter(Rewriter):
         # we expect the method__ to push in the taint in the beginning, and pop out when it is done.
         return [ast.With(items=[ast.withitem(scope_expr, ast.Name(id=TaintName))], body=body)]
 
-class Rewriter(Rewriter):
     def visit_FunctionDef(self, tree_node):
         self.init_counters()
         methods.append(tree_node.name)
@@ -56,25 +49,16 @@ class Rewriter(Rewriter):
         tree_node.body = self.wrap_in_method(tree_node.body, tree_node.args)
         return tree_node
 
-def rewrite_def(src):
-    v = ast.fix_missing_locations(Rewriter().visit(ast.parse(src)))
-    return astor.to_source(v)
-def read_it(fn):
-    with open(fn) as f: return f.read()
-
-class Rewriter(Rewriter):
     def wrap_in_inner(self, name, counter, val, body):
         val_expr = ast.Num(val)
         stack_iter = ast.Name(id='%s_%d_stack__' % (name, counter))
         scope_expr = ast.Call(func=ast.Name(id=TaintedScope, ctx=ast.Load()), args=[ast.Str(stack_iter.id)], keywords=[])
         return [ast.With(items=[ast.withitem(scope_expr, ast.Name(id=TaintName))], body=body)]
 
-class Rewriter(Rewriter):
     def wrap_expr_in_call(self, name, node, argnames):
         nargs = [ast.Name(id=a, ctx=ast.Load()) for a in argnames]
         return ast.Call(func=ast.Name(id=name, ctx=ast.Load()), args=[node, *nargs ], keywords=[])
 
-class Rewriter(Rewriter):
     def process_if(self, tree_node, counter, val=None):
         if val is None: val = 0
         else: val += 1
@@ -95,7 +79,6 @@ class Rewriter(Rewriter):
                 for node in tree_node.orelse: self.generic_visit(node)
                 tree_node.orelse = self.wrap_in_inner('if', counter, val, tree_node.orelse)
 
-class Rewriter(Rewriter):
     def visit_If(self, tree_node):
         self.if_counter += 1
         counter = self.if_counter
@@ -114,7 +97,6 @@ class Rewriter(Rewriter):
         self.process_if(tree_node, counter=self.if_counter)
         return tree_node
 
-class Rewriter(Rewriter):
     # AugAssign(expr target, operator op, expr value)
     # AnnAssign(expr target, expr annotation, expr? value, int simple)
     # Assign(expr* targets, expr value, string? type_comment)
@@ -133,27 +115,21 @@ class Rewriter(Rewriter):
         tree_node.value = self.wrap_expr_in_call(TaintAssign, tree_node.value, [ast.Name(id=TaintName)])
         return self.generic_visit(tree_node)
 
-
-class Rewriter(Rewriter):
     def visit_Expr(self, tree_node):
         self.generic_visit(tree_node.value)
         tree_node.value = self.wrap_expr_in_call(TaintAssign, tree_node.value, [ast.Name(id=TaintName)])
         return self.generic_visit(tree_node)
 
-class Rewriter(Rewriter):
     def visit_Return(self, tree_node):
         self.generic_visit(tree_node.value)
         tree_node.value = self.wrap_expr_in_call(TaintAssign, tree_node.value, [ast.Name(id=TaintName)])
         return self.generic_visit(tree_node)
 
-class Rewriter(Rewriter):
     def visit_Raise(self, tree_node):
         #self.generic_visit(tree_node.cause)
         tree_node.exc = self.wrap_expr_in_call(TaintAssign, tree_node.exc, [ast.Name(id=TaintName)])
         return self.generic_visit(tree_node)
 
-
-class Rewriter(Rewriter):
     def visit_While(self, tree_node):
         self.generic_visit(tree_node)
         self.while_counter += 1
@@ -163,10 +139,6 @@ class Rewriter(Rewriter):
         assert not tree_node.orelse
         tree_node.body = self.wrap_in_inner('while', counter, 0, body)
         return tree_node
-
-def rewrite_cf(src):
-    v = ast.fix_missing_locations(Rewriter().visit(ast.parse(src)))
-    return astor.to_source(v)
 
 def rewrite(src):
     src = ast.fix_missing_locations(InRewriter().visit(ast.parse(src)))
@@ -188,6 +160,9 @@ if __name__ == "__main__":
         main(tainted_input)
 """
     return "%s\n%s\n%s" % (header, source, footer)
+
+def read_it(fn):
+    with open(fn) as f: return f.read()
 
 if __name__ == '__main__':
     import sys
