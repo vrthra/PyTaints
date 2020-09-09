@@ -5,10 +5,15 @@ methods = []
 Epsilon = '-'
 NoEpsilon = '='
 TaintName = '__taint__'
+TaintAssign = '__tainted'
+TaintWrap = 'taint_wrap__'
+TaintExpr = 'taint_expr__'
+TaintedMethod = 'tainted_method__'
+TaintedScope = 'tainted_scope__'
 
 class InRewriter(ast.NodeTransformer):
     def wrap(self, node):
-        return ast.Call(func=ast.Name(id='taint_wrap__', ctx=ast.Load()), args=[node], keywords=[])
+        return ast.Call(func=ast.Name(id=TaintWrap, ctx=ast.Load()), args=[node], keywords=[])
 
 class InRewriter(InRewriter):
     def visit_Compare(self, tree_node):
@@ -38,7 +43,7 @@ class Rewriter(Rewriter):
         method_name_expr = ast.Str(methods[-1])
         my_args = ast.List(args.args, ast.Load())
         args = [method_name_expr, my_args]
-        scope_expr = ast.Call(func=ast.Name(id='tainted_method__', ctx=ast.Load()), args=args, keywords=[])
+        scope_expr = ast.Call(func=ast.Name(id=TaintedMethod, ctx=ast.Load()), args=args, keywords=[])
 
         # we expect the method__ to push in the taint in the beginning, and pop out when it is done.
         return [ast.With(items=[ast.withitem(scope_expr, ast.Name(id=TaintName))], body=body)]
@@ -61,7 +66,7 @@ class Rewriter(Rewriter):
     def wrap_in_inner(self, name, counter, val, body):
         val_expr = ast.Num(val)
         stack_iter = ast.Name(id='%s_%d_stack__' % (name, counter))
-        scope_expr = ast.Call(func=ast.Name(id='tainted_scope__', ctx=ast.Load()), args=[ast.Str(stack_iter.id)], keywords=[])
+        scope_expr = ast.Call(func=ast.Name(id=TaintedScope, ctx=ast.Load()), args=[ast.Str(stack_iter.id)], keywords=[])
         return [ast.With(items=[ast.withitem(scope_expr, ast.Name(id=TaintName))], body=body)]
 
 class Rewriter(Rewriter):
@@ -77,7 +82,7 @@ class Rewriter(Rewriter):
         self.generic_visit(tree_node.test)
         for node in tree_node.body:
             if_body.append(self.generic_visit(ast.Module(node)).body)
-        tree_node.test = self.wrap_expr_in_call('taint_expr__', tree_node.test, [ ast.Name(id=TaintName)])
+        tree_node.test = self.wrap_expr_in_call(TaintExpr, tree_node.test, [ ast.Name(id=TaintName)])
 
         tree_node.body = self.wrap_in_inner('if', counter, val, if_body)
 
@@ -115,15 +120,45 @@ class Rewriter(Rewriter):
     # Assign(expr* targets, expr value, string? type_comment)
     def visit_Assign(self, tree_node):
         self.generic_visit(tree_node.value)
-        tree_node.value = self.wrap_expr_in_call('taint_assign__', tree_node.value, [ast.Name(id=TaintName)])
+        tree_node.value = self.wrap_expr_in_call(TaintAssign, tree_node.value, [ast.Name(id=TaintName)])
         return self.generic_visit(tree_node)
+
+    def visit_AugAssign(self, tree_node):
+        self.generic_visit(tree_node.value)
+        tree_node.value = self.wrap_expr_in_call(TaintAssign, tree_node.value, [ast.Name(id=TaintName)])
+        return self.generic_visit(tree_node)
+
+    def visit_AnnAssign(self, tree_node):
+        self.generic_visit(tree_node.value)
+        tree_node.value = self.wrap_expr_in_call(TaintAssign, tree_node.value, [ast.Name(id=TaintName)])
+        return self.generic_visit(tree_node)
+
+
+class Rewriter(Rewriter):
+    def visit_Expr(self, tree_node):
+        self.generic_visit(tree_node.value)
+        tree_node.value = self.wrap_expr_in_call(TaintAssign, tree_node.value, [ast.Name(id=TaintName)])
+        return self.generic_visit(tree_node)
+
+class Rewriter(Rewriter):
+    def visit_Return(self, tree_node):
+        self.generic_visit(tree_node.value)
+        tree_node.value = self.wrap_expr_in_call(TaintAssign, tree_node.value, [ast.Name(id=TaintName)])
+        return self.generic_visit(tree_node)
+
+class Rewriter(Rewriter):
+    def visit_Raise(self, tree_node):
+        #self.generic_visit(tree_node.cause)
+        tree_node.exc = self.wrap_expr_in_call(TaintAssign, tree_node.exc, [ast.Name(id=TaintName)])
+        return self.generic_visit(tree_node)
+
 
 class Rewriter(Rewriter):
     def visit_While(self, tree_node):
         self.generic_visit(tree_node)
         self.while_counter += 1
         counter = self.while_counter
-        tree_node.test = self.wrap_expr_in_call('taint_expr__', tree_node.test, [ast.Name(id=TaintName)])
+        tree_node.test = self.wrap_expr_in_call(TaintExpr, tree_node.test, [ast.Name(id=TaintName)])
         body = tree_node.body
         assert not tree_node.orelse
         tree_node.body = self.wrap_in_inner('while', counter, 0, body)
@@ -140,11 +175,8 @@ def rewrite(src):
 import json
 import sys
 import taints
-from taints import taint_wrap__, tainted_method__, tainted_scope__, taint_expr__, taint_assign__
-
-# taints.TAINT is an array whose last item is the current taint.
-# taint_assign__ and taint_expr__ uses and modifies this array.
-    """
+from taints import %s, %s, %s, %s, %s
+    """ % (TaintWrap, TaintedMethod, TaintedScope, TaintExpr, TaintAssign)
     source = astor.to_source(v)
     footer = """
 if __name__ == "__main__":
