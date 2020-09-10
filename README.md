@@ -18,4 +18,4 @@ accomplishes this by transforming the source code. Please execute
 ```bash
 make test
 ```
-for example (and inspect `tcalculatory.py` which gets produced).
+for example (and inspect `tcalculator.py` which gets produced).
