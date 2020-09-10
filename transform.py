@@ -157,7 +157,7 @@ class TaintRewriter(ast.NodeTransformer):
         #return node # <- to disable
         name_expr = ast.Str(name)
         counter_expr = ast.Num(counter)
-        args = [name_expr, counter_expr]
+        args = [name_expr, counter_expr, ast.Name(id=TaintName)]
         scope_expr = ast.Call(func=ast.Name(id=TaintedScope, ctx=ast.Load()), args=args, keywords=[])
         return ast.With(items=[ast.withitem(scope_expr, ast.Name(id=TaintName))], body=[node])
 

@@ -8,4 +8,4 @@ test: tcalculator.py
 	python3 tcalculator.py a
 
 clean:
-	rm a tcalculator.py
+	rm -f a tcalculator.py

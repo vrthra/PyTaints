@@ -1,6 +1,28 @@
 import inspect
 import enum
 
+class ttuple(tuple):
+    def __new__(cls, value, *args, **kw):
+        return tuple.__new__(cls, value)
+
+    def __init__(self, value, taint=None, **kwargs):
+        self.taint = taint
+
+class tint(int):
+    def __new__(cls, value, *args, **kw):
+        return int.__new__(cls, value)
+
+    def __init__(self, value, taint=None, **kwargs):
+        self.taint = taint
+
+class tbool(int):
+    def __new__(cls, value, *args, **kw):
+        return int.__new__(cls, value)
+
+    def __init__(self, value, taint=None, **kwargs):
+        self.taint = taint
+
+
 class tstr_(str):
     def __new__(cls, value, *args, **kw):
         return super(tstr_, cls).__new__(cls, value)
@@ -310,10 +332,26 @@ class Taint:
     def t(self):
         return self.TAINTS[-1]
 
-    def p(self, p, val):
-        print(' ' * len(self.TAINTS), self.TAINTS[-1], repr(p), repr(val))
+    def p_(self, p):
+        print(' ' * len(self.TAINTS), self.t(), p)
+
+    def p(self, p, val, t):
+        print(' ' * len(self.TAINTS), self.t(), repr(p), repr(val), 'taint:',hasattr(val, 'taint'), 'bgtaint:', t.t())
 
     def __call__(self, val):
+        # if hasattr(val, 'taint'): print('tainted: A')
+        # also check if self.t() has a taint
+        # if self.t()[1] is not None: print('tainted: B')
+        # TODO: if either val or self.t() has taint
+        # then, make val the more tainted of the two.
+        if hasattr(val, 'taint'): return val
+        if self.t()[1] is None: return val
+
+        if isinstance(val, int): return tint(val, '1')
+        if isinstance(val, bool): return tbool(val, '1')
+        if isinstance(val, tuple): return ttuple(val, '1')
+        if val is None: return val
+        assert False, type(val)
         return val
 
 TAINTS = Taint()
@@ -321,45 +359,33 @@ TAINTS = Taint()
 from contextlib import contextmanager
 @contextmanager
 def T_method__(method_name, *args):
-    TAINTS.push(method_name)
-    TAINTS.p('>','')
+    taint = None # method by default does not have a base taint.
+    TAINTS.push([method_name, taint])
+    TAINTS.p_('*>')
     try:
         yield TAINTS
     finally:
-        TAINTS.p('<','')
+        TAINTS.p_('*<')
         TAINTS.pop()
 
 @contextmanager
-def T_scope__(scope_name, num):
-    TAINTS.push(scope_name)
-    TAINTS.p('>','')
+def T_scope__(scope_name, num, taint_obj):
+    taint = taint_obj.t()[1]
+    TAINTS.push([scope_name, taint])
+    TAINTS.p_('>')
     try:
         yield TAINTS
     finally:
-        TAINTS.p('<','')
+        TAINTS.p_('<')
         TAINTS.pop()
 
 def taint_expr__(expr, taint):
-    taint.p('taint_expr', expr)
+    taint.p('taint_expr', expr, taint)
+    if hasattr(expr, 'taint'): # this is tainted
+        taint.t()[1] = expr.taint
+    taint.p('taint_expr', expr, taint)
     return expr
-
-def __t(values, taint):
-    taint.p('__t', values)
-    return values
 
 def wrap_input(inputstr):
     return tstr(inputstr, parent=None) #.with_comparisons([])
 
-def convert_comparisons(comparisons, inputstr):
-    light_comparisons = []
-    for idx, (method, stack_depth, mid) in comparisons:
-        if idx is None: continue
-        light_comparisons.append((idx, inputstr[idx], mid))
-    return light_comparisons
-
-def convert_method_map(method_map):
-    light_map = {}
-    for k in method_map:
-        method_num, method_name, children = method_map[k]
-        light_map[k] = (k, method_name, [c[0] for c in children])
-    return light_map
