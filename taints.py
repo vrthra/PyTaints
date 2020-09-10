@@ -613,5 +613,5 @@ def taint_expr__(expr, taint):
     return expr
 
 def wrap_input(inputstr):
-    return tstr(inputstr, taint='HIGH', parent=None)
+    return tstr(inputstr, parent=None)
 
