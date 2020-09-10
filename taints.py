@@ -313,11 +313,14 @@ class Taint:
     def p(self, p, val):
         print(' ' * len(self.TAINTS), self.TAINTS[-1], repr(p), repr(val))
 
+    def __call__(self, val):
+        return val
+
 TAINTS = Taint()
 
 from contextlib import contextmanager
 @contextmanager
-def tainted_method__(method_name, *args):
+def T_method__(method_name, *args):
     TAINTS.push(method_name)
     TAINTS.p('>','')
     try:
@@ -327,7 +330,7 @@ def tainted_method__(method_name, *args):
         TAINTS.pop()
 
 @contextmanager
-def tainted_scope__(scope_name):
+def T_scope__(scope_name, num):
     TAINTS.push(scope_name)
     TAINTS.p('>','')
     try:
