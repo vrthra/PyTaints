@@ -1,16 +1,240 @@
+from collections import UserList, UserDict
 import inspect
 import enum
-
-class ttuple(tuple):
-    def __new__(cls, value, *args, **kw):
-        return tuple.__new__(cls, value)
-
-    def __init__(self, value, taint=None, **kwargs):
-        self.taint = taint
 
 class tint(int):
     def __new__(cls, value, *args, **kw):
         return int.__new__(cls, value)
+
+    def __init__(self, value, taint=None, **kwargs):
+        self.taint = taint
+
+    def __repr__(self):
+        s = int.__repr__(self)
+        return tstr(s, taint=self.taint)
+
+    def __str__(self):
+        return tstr(int.__str__(self), taint=self.taint)
+
+    def __int__(self):
+        return int.__int__(self)
+
+    def clear_taint(self):
+        self.taint = None
+        return self
+
+    def has_taint(self):
+        return self.taint is not None
+
+    def create(self, n):
+        return tint(n, taint=self.taint)
+
+    def __add__(self, other):
+        if hasattr(other, 'taint') and other.taint == "HIGH":
+            pr_taint = other.taint
+        else:
+            pr_taint = self.taint
+        return tint(int(self) + int(other) , taint=pr_taint)
+
+class tfloat(float):
+    def __new__(cls, value, *args, **kw):
+        return float.__new__(cls, value)
+
+    def __init__(self, value, taint=None, **kwargs):
+        self.taint = taint
+
+    def __repr__(self):
+        s = float.__repr__(self)
+        return tstr(s, taint=self.taint)
+
+    def __str__(self):
+        return tstr(float.__str__(self), taint=self.taint)
+
+    def __float__(self):
+        return float.__float__(self)
+
+    def clear_taint(self):
+        self.taint = None
+        return self
+
+    def has_taint(self):
+        return self.taint is not None
+
+    def create(self, n):
+        return tfloat(n, taint=self.taint)
+
+    def __add__(self, other):
+        if hasattr(other, 'taint') and other.taint == "HIGH":
+            pr_taint = other.taint
+        else:
+            pr_taint = self.taint
+        return tfloat(float(self) + float(other) , taint=pr_taint)
+
+class tlist(UserList):
+
+    def __init__(self, liste, taint=None):
+        self.taint_counter = {}
+        self.taint = taint
+        if taint == None:
+             super().__init__(liste)
+             for dt in self.data:
+                 if hasattr(dt, 'taint'):
+                     print("inc taint")
+                     self.inc_taint(dt.taint)
+        else:
+            super().__init__({})
+            for dt in liste:
+                if isinstance(dt, str):
+                    self.data.append(tstr(dt, taint))
+                elif isinstance(dt, int):
+                    self.data.append(tint(dt, taint))
+                elif isinstance(dt, float):
+                    pass
+                self.inc_taint(taint)
+
+
+        self.set_taint_helper()
+
+
+    def __setitem__(self, i, item):
+        if i == len(self.data):
+            self.data.append(item)
+        else:
+            self.data[i] = item
+        if hasattr(item, 'taint'):
+            self.inc_taint(item.taint)
+
+        self.set_taint_helper()
+
+
+    def __getitem__(self, key):
+        value = super().__getitem__(key)
+        if hasattr(value, 'taint'):
+            return value
+        #print("wrapping the value")
+        return value
+
+    def __delitem__(self, i):
+        self.pop(i)
+
+    def pop(self, i):
+        elem = super().pop(i)
+        if hasattr(elem, 'taint'):
+            self.dec_taint(elem.taint)
+        return elem
+
+    def remove(self, item):
+        idx = super().index(item)
+        elem = super().pop(idx)
+        if hasattr(elem, 'taint'):
+            self.dec_taint(elem.taint)
+
+
+    def append(self, item):
+        self.data.append(item)
+        if hasattr(item, 'taint'):
+            self.inc_taint(item.taint)
+
+        self.set_taint_helper()
+
+    def highest_taint(self):
+        return self.highest_taint
+
+
+    def __repr__(self):
+        return f"{type(self).__name__}({super().__repr__()}, {self.highest_taint})"
+
+
+    def set_taint_helper(self):
+        if 'HIGH' in self.taint_counter:
+           self.highest_taint = 'HIGH'
+           self.taint = 'HIGH'
+        elif 'LOW' in self.taint_counter:
+           self.highest_taint = 'LOW'
+           self.taint = 'LOW'
+        else:
+           self.highest_taint = None
+
+
+    def inc_taint(self, taint):
+        if not taint in self.taint_counter:
+            self.taint_counter[taint] = 1
+        else:
+            self.taint_counter[taint] += 1
+
+
+    def dec_taint(self, taint):
+        self.taint_counter[taint] -= 1
+        if self.taint_counter[taint] == 0:
+            del self.taint_counter[taint]
+            self.set_taint_helper()
+
+class tdict(UserDict):
+    def __init__(self, dicte, taint=None):
+        self.taint_counter = {}
+        self.taint = taint
+        if taint == None:
+             super().__init__(dicte)
+        else:
+             super().__init__({})
+             for key, value in dicte.items():
+                 if isinstance(value, str):
+                     self.data[key] = tstr(value, taint)
+                 elif isinstance(value, int):
+                     self.data[key] = tint(value, taint)
+                 elif isinstance(value, float):
+                    pass
+                 self.inc_taint(taint)
+
+        self.set_taint_helper()
+
+    def __delitem__(self, key):
+        value = self.data.pop(key)
+        if hasattr(value, 'taint'):
+            self.dec_taint(value.taint)
+        self.set_taint_helper()
+
+    def __setitem__(self, key, value):
+        if key in self:
+            old_val = self.data[key]
+            if hasattr(old_val, 'taint'):
+                self.dec_taint(old_val.taint)
+        super().__setitem__(key, value)
+        if hasattr(value, 'taint'):
+            self.inc_taint(value.taint)
+        self.set_taint_helper()
+
+    def __repr__(self):
+        return f"{type(self).__name__}({super().__repr__()}, {self.highest_taint})"
+
+    def set_taint_helper(self):
+        if 'HIGH' in self.taint_counter:
+           self.highest_taint = 'HIGH'
+           self.taint = 'HIGH'
+        elif 'LOW' in self.taint_counter:
+           self.highest_taint = 'LOW'
+           self.taint = 'LOW'
+        else:
+           self.highest_taint = None
+
+
+    def inc_taint(self, taint):
+        if not taint in self.taint_counter:
+            self.taint_counter[taint] = 1
+        else:
+            self.taint_counter[taint] += 1
+
+
+    def dec_taint(self, taint):
+        self.taint_counter[taint] -= 1
+        if self.taint_counter[taint] == 0:
+            del self.taint_counter[taint]
+            self.set_taint_helper()
+
+
+class ttuple(tuple):
+    def __new__(cls, value, *args, **kw):
+        return tuple.__new__(cls, value)
 
     def __init__(self, value, taint=None, **kwargs):
         self.taint = taint
@@ -333,12 +557,13 @@ class Taint:
         return self.TAINTS[-1]
 
     def p_(self, p):
-        print(' ' * len(self.TAINTS), self.t(), p)
+        print(' ' * len(self.TAINTS), p, self.t())
 
     def p(self, p, val, t):
         print(' ' * len(self.TAINTS), self.t(), repr(p), repr(val), 'taint:',hasattr(val, 'taint'), 'bgtaint:', t.t())
 
     def __call__(self, val):
+        if val is None: return val
         # if hasattr(val, 'taint'): print('tainted: A')
         # also check if self.t() has a taint
         # if self.t()[1] is not None: print('tainted: B')
@@ -350,9 +575,10 @@ class Taint:
         if isinstance(val, int): return tint(val, '1')
         if isinstance(val, bool): return tbool(val, '1')
         if isinstance(val, tuple): return ttuple(val, '1')
-        if val is None: return val
-        assert False, type(val)
-        return val
+        if isinstance(val, list): return tlist
+        if isinstance(val, float): return tfloat
+        if isinstance(val, dict): return tdict
+        raise Exception ("Taint conversion unknown:" + str(type(val)))
 
 TAINTS = Taint()
 
@@ -361,11 +587,11 @@ from contextlib import contextmanager
 def T_method__(method_name, *args):
     taint = None # method by default does not have a base taint.
     TAINTS.push([method_name, taint])
-    TAINTS.p_('*>')
+    TAINTS.p_('>*')
     try:
         yield TAINTS
     finally:
-        TAINTS.p_('*<')
+        TAINTS.p_('<*')
         TAINTS.pop()
 
 @contextmanager
@@ -387,5 +613,5 @@ def taint_expr__(expr, taint):
     return expr
 
 def wrap_input(inputstr):
-    return tstr(inputstr, parent=None) #.with_comparisons([])
+    return tstr(inputstr, taint='HIGH', parent=None)
 

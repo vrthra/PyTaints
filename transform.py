@@ -47,6 +47,13 @@ class TaintRewriter(ast.NodeTransformer):
         return self.I(tree_node)
 
 
+    def visit_ListComp(self, tree_node):
+        gs = []
+        for g in tree_node.generators:
+             # (expr target, expr iter, expr* ifs)
+             self.generic_visit(ast.Module(g.iter)).body
+        return self.I(tree_node)
+
     # ListComp
     # SetComp
     # DictComp
@@ -187,6 +194,18 @@ class TaintRewriter(ast.NodeTransformer):
         assert not tree_node.orelse
         tree_node.test = self.wrap_expr_in_call(TaintExpr, tree_node.test, [ast.Name(id=TaintName)])
         return self.wrap_in_outer('while', counter, tree_node)
+
+
+    def visit_For(self, tree_node):
+        self.while_counter += 1
+        counter = self.while_counter
+        body = []
+        for node in tree_node.body:
+            n = self.generic_visit(ast.Module(node))
+            body.append(n.body)
+        tree_node.body = body
+        tree_node.iter = self.wrap_expr_in_call(TaintExpr, tree_node.iter, [ast.Name(id=TaintName)])
+        return self.wrap_in_outer('for', counter, tree_node)
 
 
 def rewrite(src):
