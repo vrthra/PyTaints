@@ -211,7 +211,7 @@ class TaintRewriter(ast.NodeTransformer):
 def rewrite(src):
     v = ast.fix_missing_locations(TaintRewriter().visit(ast.parse(src)))
     header = """\
-import taints
+import taintwrappers as wrapper
 from taints import T_method__, T_scope__
 from taints import taint_expr__ as T_
 """
@@ -223,7 +223,7 @@ if __name__ == "__main__":
     for arg in sys.argv[1:]:
         with open(arg) as f:
             mystring = f.read().strip().replace('\\n', ' ')
-        tainted_input = taints.wrap_input(mystring)
+        tainted_input = wrapper.wrap_input(mystring)
         main(tainted_input)
 """
     return "%s\n%s\n%s" % (header, source, footer)
