@@ -1,10 +1,5 @@
 import taintwrappers as w
-def trace_return():
-    METHOD_NUM_STACK.pop()
 
-def trace_set_method(method):
-    set_current_method(method, len(METHOD_NUM_STACK), METHOD_NUM_STACK[-1][0])
-    
 class in_wrap:
     def __init__(self, s):
         self.s = s
@@ -17,7 +12,6 @@ def taint_wrap__(st):
         return in_wrap(st)
     else:
         return st
-
 
 class Taint:
     def __init__(self):
@@ -36,50 +30,73 @@ class Taint:
         print(' ' * len(self.TAINTS), p, self.t())
 
     def p(self, p, val, t):
-        print(' ' * len(self.TAINTS), self.t(), repr(p), repr(val), 'taint:',hasattr(val, 'taint'), 'bgtaint:', t.t())
+        ...
+        #print(' ' * len(self.TAINTS), self.t(), repr(p), repr(val), 'taint:',hasattr(val, 'taint'), 'bgtaint:', t.t())
 
     def __call__(self, val):
         if val is None: return val
-        # if hasattr(val, 'taint'): print('tainted: A')
-        # also check if self.t() has a taint
-        # if self.t()[1] is not None: print('tainted: B')
-        # TODO: if either val or self.t() has taint
-        # then, make val the more tainted of the two.
-        if hasattr(val, 'taint'): return val
-        if self.t()[1] is None: return val
+        val_taint = val.taint if hasattr(val, 'taint') else None
+        bg_taint = self.t()[1]
+        cur_taint = taint_policy(val_taint, bg_taint)
+        if hasattr(val, 'taint'):
+            val.taint = cur_taint
+            return val
+        if isinstance(val, int): return w.tint(val, cur_taint)
+        if isinstance(val, bool): return w.tbool(val, cur_taint)
+        if isinstance(val, tuple): return w.ttuple(val, cur_taint)
+        if isinstance(val, str): return w.tstr(val, cur_taint)
+        if isinstance(val, list): return w.tlist(val, cur_taint)
+        if isinstance(val, float): return w.tfloat(val, cur_taint)
+        if isinstance(val, dict): return w.tdict(val, cur_taint)
 
-        if isinstance(val, int): return w.tint(val, '1')
-        if isinstance(val, bool): return w.tbool(val, '1')
-        if isinstance(val, tuple): return w.ttuple(val, '1')
-        if isinstance(val, list): return w.tlist(val, '1')
-        if isinstance(val, float): return w.tfloat(val, '1')
-        if isinstance(val, dict): return w.tdict(val, '1')
+        # no taints for module
+        if type(val) == type(w): return val
         raise Exception ("Taint conversion unknown:" + str(type(val)))
 
 TAINTS = Taint()
+def taint_policy(taint_a, taint_b):
+    if taint_a is None: return taint_b
+    if taint_b is None: return taint_a
+    return taint_a
 
-from contextlib import contextmanager
-@contextmanager
-def T_method__(method_name, *args):
-    taint = None # method by default does not have a base taint.
-    TAINTS.push([method_name, taint])
-    TAINTS.p_('>*')
-    try:
-        yield TAINTS
-    finally:
-        TAINTS.p_('<*')
+import traceback
+class T_method:
+    def __init__(self, method_name, *args):
+        self.method_name = method_name
+
+    def __enter__(self):
+        taint = None # method by default does not have a base taint.
+        TAINTS.push([self.method_name, taint])
+        TAINTS.p_('*>')
+        return TAINTS
+
+    def __exit__(self, typ, val, tb):
+        p = '*<'
+        if isinstance(val, Exception):
+             p = '*<' + str(val)
+             traceback.print_tb(tb)
+        TAINTS.p_(p)
         TAINTS.pop()
 
-@contextmanager
-def T_scope__(scope_name, num, taint_obj):
-    taint = taint_obj.t()[1]
-    TAINTS.push([scope_name, taint])
-    TAINTS.p_('>')
-    try:
-        yield TAINTS
-    finally:
-        TAINTS.p_('<')
+T_method__ = T_method
+
+class T_scope:
+    def __init__(self, scope_name, num, taint_obj):
+        taint = taint_obj.t()[1]
+        TAINTS.push([scope_name, taint])
+        TAINTS.p_('> %s %s' % (scope_name, num))
+
+    def __enter__(self):
+        return TAINTS
+
+    def __exit__(self, typ, val, tb):
+        p = '*<'
+        if isinstance(val, Exception):
+             p = '*<' + str(val)
+             traceback.print_tb(tb)
+        TAINTS.p_(p)
         TAINTS.pop()
+T_scope__ = T_scope
 
 def taint_expr__(expr, taint):
     taint.p('taint_expr', expr, taint)
@@ -88,3 +105,4 @@ def taint_expr__(expr, taint):
     taint.p('taint_expr', expr, taint)
     return expr
 
+T_ = taint_expr__

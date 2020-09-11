@@ -213,11 +213,12 @@ def rewrite(src):
     header = """\
 import taintwrappers as wrapper
 from taints import T_method__, T_scope__
-from taints import taint_expr__ as T_
+from taints import T_
 """
     source = astor.to_source(v)
     footer = """\
 if __name__ == "__main__":
+    wrapper.initialize()
     import sys
     js = []
     for arg in sys.argv[1:]:

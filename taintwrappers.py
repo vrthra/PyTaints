@@ -29,11 +29,10 @@ class tint(int):
         return tint(n, taint=self.taint)
 
     def __add__(self, other):
-        if hasattr(other, 'taint') and other.taint == "HIGH":
-            pr_taint = other.taint
+        if hasattr(other, 'taint'):
+            return tint(int(self) + int(other) , taint=other.taint)
         else:
-            pr_taint = self.taint
-        return tint(int(self) + int(other) , taint=pr_taint)
+            return tint(int(self) + int(other) , taint=self.taint)
 
 class tfloat(float):
     def __new__(cls, value, *args, **kw):
@@ -63,173 +62,20 @@ class tfloat(float):
         return tfloat(n, taint=self.taint)
 
     def __add__(self, other):
-        if hasattr(other, 'taint') and other.taint == "HIGH":
-            pr_taint = other.taint
+        if hasattr(other, 'taint'):
+            return tint(int(self) + int(other) , taint=other.taint)
         else:
-            pr_taint = self.taint
-        return tfloat(float(self) + float(other) , taint=pr_taint)
+            return tint(int(self) + int(other) , taint=self.taint)
 
 class tlist(UserList):
-
     def __init__(self, liste, taint=None):
-        self.taint_counter = {}
+        UserList.__init__(self)
         self.taint = taint
-        if taint == None:
-             super().__init__(liste)
-             for dt in self.data:
-                 if hasattr(dt, 'taint'):
-                     print("inc taint")
-                     self.inc_taint(dt.taint)
-        else:
-            super().__init__({})
-            for dt in liste:
-                if isinstance(dt, str):
-                    self.data.append(tstr(dt, taint))
-                elif isinstance(dt, int):
-                    self.data.append(tint(dt, taint))
-                elif isinstance(dt, float):
-                    pass
-                self.inc_taint(taint)
-
-
-        self.set_taint_helper()
-
-
-    def __setitem__(self, i, item):
-        if i == len(self.data):
-            self.data.append(item)
-        else:
-            self.data[i] = item
-        if hasattr(item, 'taint'):
-            self.inc_taint(item.taint)
-
-        self.set_taint_helper()
-
-
-    def __getitem__(self, key):
-        value = super().__getitem__(key)
-        if hasattr(value, 'taint'):
-            return value
-        #print("wrapping the value")
-        return value
-
-    def __delitem__(self, i):
-        self.pop(i)
-
-    def pop(self, i):
-        elem = super().pop(i)
-        if hasattr(elem, 'taint'):
-            self.dec_taint(elem.taint)
-        return elem
-
-    def remove(self, item):
-        idx = super().index(item)
-        elem = super().pop(idx)
-        if hasattr(elem, 'taint'):
-            self.dec_taint(elem.taint)
-
-
-    def append(self, item):
-        self.data.append(item)
-        if hasattr(item, 'taint'):
-            self.inc_taint(item.taint)
-
-        self.set_taint_helper()
-
-    def highest_taint(self):
-        return self.highest_taint
-
-
-    def __repr__(self):
-        return f"{type(self).__name__}({super().__repr__()}, {self.highest_taint})"
-
-
-    def set_taint_helper(self):
-        if 'HIGH' in self.taint_counter:
-           self.highest_taint = 'HIGH'
-           self.taint = 'HIGH'
-        elif 'LOW' in self.taint_counter:
-           self.highest_taint = 'LOW'
-           self.taint = 'LOW'
-        else:
-           self.highest_taint = None
-
-
-    def inc_taint(self, taint):
-        if not taint in self.taint_counter:
-            self.taint_counter[taint] = 1
-        else:
-            self.taint_counter[taint] += 1
-
-
-    def dec_taint(self, taint):
-        self.taint_counter[taint] -= 1
-        if self.taint_counter[taint] == 0:
-            del self.taint_counter[taint]
-            self.set_taint_helper()
 
 class tdict(UserDict):
     def __init__(self, dicte, taint=None):
-        self.taint_counter = {}
+        UserDict.__init__(self)
         self.taint = taint
-        if taint == None:
-             super().__init__(dicte)
-        else:
-             super().__init__({})
-             for key, value in dicte.items():
-                 if isinstance(value, str):
-                     self.data[key] = tstr(value, taint)
-                 elif isinstance(value, int):
-                     self.data[key] = tint(value, taint)
-                 elif isinstance(value, float):
-                    pass
-                 self.inc_taint(taint)
-
-        self.set_taint_helper()
-
-    def __delitem__(self, key):
-        value = self.data.pop(key)
-        if hasattr(value, 'taint'):
-            self.dec_taint(value.taint)
-        self.set_taint_helper()
-
-    def __setitem__(self, key, value):
-        if key in self:
-            old_val = self.data[key]
-            if hasattr(old_val, 'taint'):
-                self.dec_taint(old_val.taint)
-        super().__setitem__(key, value)
-        if hasattr(value, 'taint'):
-            self.inc_taint(value.taint)
-        self.set_taint_helper()
-
-    def __repr__(self):
-        return f"{type(self).__name__}({super().__repr__()}, {self.highest_taint})"
-
-    def set_taint_helper(self):
-        if 'HIGH' in self.taint_counter:
-           self.highest_taint = 'HIGH'
-           self.taint = 'HIGH'
-        elif 'LOW' in self.taint_counter:
-           self.highest_taint = 'LOW'
-           self.taint = 'LOW'
-        else:
-           self.highest_taint = None
-
-
-    def inc_taint(self, taint):
-        if not taint in self.taint_counter:
-            self.taint_counter[taint] = 1
-        else:
-            self.taint_counter[taint] += 1
-
-
-    def dec_taint(self, taint):
-        self.taint_counter[taint] -= 1
-        if self.taint_counter[taint] == 0:
-            del self.taint_counter[taint]
-            self.set_taint_helper()
-
 
 class ttuple(tuple):
     def __new__(cls, value, *args, **kw):
@@ -508,14 +354,6 @@ def make_str_wrapper(fun):
     return proxy
 
 import types
-tstr_members = [name for name, fn in inspect.getmembers(tstr, callable)
-                if isinstance(fn, types.FunctionType) and fn.__qualname__.startswith('tstr')]
-
-for name, fn in inspect.getmembers(str, callable):
-    if name not in set(['__class__', '__new__', '__str__', '__init__',
-                        '__repr__', '__getattribute__']) | set(tstr_members):
-        setattr(tstr, name, make_str_wrapper(fn))
-
 
 def make_str_abort_wrapper(fun):
     def proxy(*args, **kwargs):
@@ -525,4 +363,28 @@ def make_str_abort_wrapper(fun):
 
 def wrap_input(inputstr):
     return tstr(inputstr, parent=None)
+
+
+
+def make_proxy_wrapper(name):
+    def proxy(self, *args, **kwargs):
+        fun = getattr(self.o, name)
+        return fun(self.o, *args, **kwargs)
+    return proxy
+
+
+
+def initialize():
+    tstr_members = [name for name, fn in inspect.getmembers(tstr, callable)
+                    if isinstance(fn, types.FunctionType) and fn.__qualname__.startswith('tstr')]
+
+    for name, fn in inspect.getmembers(str, callable):
+        if name not in set(['__class__', '__new__', '__str__', '__init__',
+                            '__repr__', '__getattribute__']) | set(tstr_members):
+            setattr(tstr, name, make_str_wrapper(fn))
+
+    #for name, fn in inspect.getmembers(list, callable):
+    #    if name in ['__init__', '__new__', '__class__', '__dict__', '__getattribute__', '__dir__']:
+    #        continue
+    #    setattr(tlist, name, make_proxy_wrapper(name))
 
