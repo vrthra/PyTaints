@@ -82,6 +82,7 @@ class TaintStack:
         return TaintedObject(val, cur_taint)
 
 TAINTS = TaintStack()
+METHODS = []
 
 import traceback
 class T_method:
@@ -101,6 +102,9 @@ class T_method:
              traceback.print_tb(tb)
         TAINTS.p_(p)
         TAINTS.pop()
+         # indicate to `O` that we do not need taint tramsmission
+        METHODS.append(0)
+
 
 T_method__ = T_method
 
@@ -132,16 +136,25 @@ def taint_expr__(expr, taint):
 
 T_ = taint_expr__
 
+
 def O(fn):
     if not isinstance(fn, type(lambda: 1)): return fn
     def proxy(*args, **kwargs):
-        # TODO: Check if T_method is in operation, if it is not, then
+        # Check if T_method is in operation, if it is not, then
         # check if any of the args and kwargs are tainted. If it is,
         # taint the returned value (v)
         # also, if any arguments are tainted containers, extract the
         # original object before passing it.
+        l_methods = len(METHODS)
         v = fn(*args, **kwargs)
-        return v
+        l1_methods = len(METHODS)
+        if l1_methods > l_methods:
+            m = METHODS.pop()
+            assert not m
+            return v
+        else:
+            tp = TaintPolicy([a.taint for a in args + kwargs if isinstance(a, TaintedObject)])
+            return TaintedObject(v, tp)
     return proxy
 
 def Tx(val):
