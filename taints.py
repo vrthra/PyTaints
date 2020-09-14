@@ -1,20 +1,15 @@
 class in_wrap:
-    def __init__(self, s):
-        self.s = s
+    def __init__(self, s): self.s = s
 
-    def in_(self, s):
-        return self.s in s
+    def in_(self, s): return self.s in s
 
 def taint_wrap__(st):
-    if isinstance(st, str):
-        return in_wrap(st)
-    else:
-        return st
+    if isinstance(st, str): return in_wrap(st)
+    return st
 
 class TaintedObject:
     def __init__(self, o, taint):
-        self.o = o
-        self.taint = taint
+        self.o, self.taint = o, taint
 
     def __getitem__(self, tainted_key):
         if isinstance(tainted_key, slice):
@@ -57,7 +52,7 @@ class TaintedException(Exception):
     def __init__(self, e):
         self.e = e
 
-class Taint:
+class TaintStack:
     def __init__(self):
         self.TAINTS = [None]
 
@@ -78,21 +73,15 @@ class Taint:
         #print(' ' * len(self.TAINTS), self.t(), repr(p), repr(val), 'taint:',hasattr(val, 'taint'), 'bgtaint:', t.t())
 
     def __call__(self, val):
-        if isinstance(val, Exception):
-            return TaintedException(val)
+        if isinstance(val, Exception): return TaintedException(val)
         # Always produce a new object.
-        # TODO: this should simple be a single type custom object that is a
-        # container for all kinds of tainted values. It should define
-        # all dunder methods which extract values and pass on the
-        # resulting taints just like proxy.
-
         if val is None: return val
         val_taint = val.taint if hasattr(val, 'taint') else None
         bg_taint = self.t()[1]
         cur_taint = TaintPolicy(val_taint, bg_taint)
         return TaintedObject(val, cur_taint)
 
-TAINTS = Taint()
+TAINTS = TaintStack()
 
 import traceback
 class T_method:
