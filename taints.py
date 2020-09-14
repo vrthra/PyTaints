@@ -50,11 +50,14 @@ class TaintedObject:
         t, o = unwrap(self.o)
         return 'T[%s]' % (repr(o))
 
-    def __bool__(self):
-        t, o = unwrap(self.o)
-        return bool(o)
+    # TODO: We should actually wrap it, but python restricts
+    # __bool__ from returning anyting but booleans.
+    #def __bool__(self):
+    #    t, o = unwrap(self.o)
+    #    return bool(o)
 
     def __getattr__(self, name):
+        print('TODO:', name)
         return getattr(self.o, name)
 
 class TaintedException(Exception):
