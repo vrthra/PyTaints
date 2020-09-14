@@ -69,8 +69,12 @@ class TaintRewriter(ast.NodeTransformer):
     # YieldFrom
 
     def visit_Compare(self, tree_node):
-        self.generic_visit(tree_node)
-        return self.I(tree_node)
+        left = tree_node.left
+        if not tree_node.ops or not isinstance(tree_node.ops[0], ast.In):
+            self.generic_visit(tree_node)
+            return self.I(tree_node)
+        mod_val = ast.Call(func=ast.Attribute(value=self.wrap(left), attr='in_'), args=tree_node.comparators, keywords=[])
+        return mod_val
 
     # Call(expr func, expr* args, keyword* keywords)
     # what happens when an empty call is made? Do we
@@ -192,7 +196,8 @@ class TaintRewriter(ast.NodeTransformer):
             else_body.append(n.body)
         tree_node.orelse = else_body
 
-        tree_node.test = self.wrap_expr_in_call(TaintExpr, tree_node.test, [ ast.Name(id=TaintName)])
+        test = self.generic_visit(ast.Module(tree_node.test)).body
+        tree_node.test = self.wrap_expr_in_call(TaintExpr, test, [ ast.Name(id=TaintName)])
         return self.wrap_in_outer('if', counter, tree_node)
 
     def visit_While(self, tree_node):
@@ -204,7 +209,8 @@ class TaintRewriter(ast.NodeTransformer):
             body.append(n.body)
         tree_node.body = body
         assert not tree_node.orelse
-        tree_node.test = self.wrap_expr_in_call(TaintExpr, tree_node.test, [ast.Name(id=TaintName)])
+        test = self.generic_visit(ast.Module(tree_node.test)).body
+        tree_node.test = self.wrap_expr_in_call(TaintExpr, test, [ast.Name(id=TaintName)])
         return self.wrap_in_outer('while', counter, tree_node)
 
 
@@ -223,21 +229,19 @@ class TaintRewriter(ast.NodeTransformer):
 def rewrite(src):
     v = ast.fix_missing_locations(TaintRewriter().visit(ast.parse(src)))
     header = """\
-import taintwrappers as wrapper
 from taints import T_method__, T_scope__
-from taints import T_, O
+from taints import T_, O, Tx
+from taints import taint_wrap__
 """
     source = astor.to_source(v)
     footer = """\
 if __name__ == "__main__":
-    wrapper.initialize()
     import sys
     js = []
     for arg in sys.argv[1:]:
         with open(arg) as f:
             mystring = f.read().strip().replace('\\n', ' ')
-        tainted_input = wrapper.wrap_input(mystring)
-        main(tainted_input)
+        main(Tx(mystring, 'HIGH'))
 """
     return "%s\n%s\n%s" % (header, source, footer)
 

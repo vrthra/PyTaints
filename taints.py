@@ -1,5 +1,3 @@
-import taintwrappers as w
-
 class in_wrap:
     def __init__(self, s):
         self.s = s
@@ -12,6 +10,52 @@ def taint_wrap__(st):
         return in_wrap(st)
     else:
         return st
+
+class TaintedObject:
+    def __init__(self, o, taint):
+        self.o = o
+        self.taint = taint
+
+    def __getitem__(self, tainted_key):
+        if isinstance(tainted_key, slice):
+            tainted_start = tainted_key.start
+            tainted_stop = tainted_key.stop
+            tainted_step = tainted_key.step
+            taint_start, start = unwrap(tainted_start)
+            taint_stop, stop = unwrap(tainted_stop)
+            taint_step, step = unwrap(tainted_stop)
+            return TaintedObject(self.o[slice(start, stop, step)], taint_policy_a([taint_start, taint_stop, taint_step, self.taint]))
+
+        else:
+            taint, key = unwrap(tainted_key)
+            return TaintedObject(self.o[key], taint_policy(taint, self.taint))
+
+    def in_(self, val):
+        if isinstance(val, TaintedObject):
+            taint, val = unwrap(val)
+            return TaintedObject(val, taint_policy(taint, self.taint))
+        return TaintedObject(val, self.taint)
+
+
+    def __add__(self, other):
+        t, o = unwrap(self.o)
+        tt, ot = unwrap(other)
+        return TaintedObject((o + ot), taint_policy(t, tt))
+
+    def __repr__(self):
+        t, o = unwrap(self.o)
+        return 'T[%s]' % (repr(o))
+
+    def __bool__(self):
+        t, o = unwrap(self.o)
+        return bool(o)
+
+    def __getattr__(self, name):
+        return getattr(self.o, name)
+
+class TaintedException(Exception):
+    def __init__(self, e):
+        self.e = e
 
 class Taint:
     def __init__(self):
@@ -34,6 +78,8 @@ class Taint:
         #print(' ' * len(self.TAINTS), self.t(), repr(p), repr(val), 'taint:',hasattr(val, 'taint'), 'bgtaint:', t.t())
 
     def __call__(self, val):
+        if isinstance(val, Exception):
+            return TaintedException(val)
         # Always produce a new object.
         # TODO: this should simple be a single type custom object that is a
         # container for all kinds of tainted values. It should define
@@ -44,27 +90,19 @@ class Taint:
         val_taint = val.taint if hasattr(val, 'taint') else None
         bg_taint = self.t()[1]
         cur_taint = taint_policy(val_taint, bg_taint)
-        if hasattr(val, 'taint'):
-            # TODO: Ensure that this is a new object
-            val.taint = cur_taint
-            return val
-        if isinstance(val, int): return w.tint(val, cur_taint)
-        if isinstance(val, bool): return w.tbool(val, cur_taint)
-        if isinstance(val, tuple): return w.ttuple(val, cur_taint)
-        if isinstance(val, str): return w.tstr(val, cur_taint)
-        if isinstance(val, list): return w.tlist(val, cur_taint)
-        if isinstance(val, float): return w.tfloat(val, cur_taint)
-        if isinstance(val, dict): return w.tdict(val, cur_taint)
-
-        # no taints for module
-        if type(val) == type(w): return val
-        raise Exception ("Taint conversion unknown:" + str(type(val)))
+        return TaintedObject(val, cur_taint)
 
 TAINTS = Taint()
 def taint_policy(taint_a, taint_b):
     if taint_a is None: return taint_b
     if taint_b is None: return taint_a
     return taint_a
+
+def taint_policy_a(taints):
+    s = [t for t in taints if t is not None]
+    if s:
+        return s[0]
+    return None
 
 import traceback
 class T_method:
@@ -110,11 +148,13 @@ def taint_expr__(expr, taint):
     if hasattr(expr, 'taint'): # this is tainted
         taint.t()[1] = expr.taint
     taint.p('taint_expr', expr, taint)
-    return expr
+    t, e =  unwrap(expr)
+    return e
 
 T_ = taint_expr__
 
 def O(fn):
+    if not isinstance(fn, type(lambda: 1)): return fn
     def proxy(*args, **kwargs):
         # TODO: Check if T_method is in operation, if it is not, then
         # check if any of the args and kwargs are tainted. If it is,
@@ -124,3 +164,14 @@ def O(fn):
         v = fn(*args, **kwargs)
         return v
     return proxy
+
+def Tx(val, taint):
+    return TaintedObject(val, taint)
+
+def unwrap(o):
+    if isinstance(o, TaintedObject):
+        computed_taint, original_o = unwrap(o.o)
+        cur_taint = taint_policy(o.taint, computed_taint)
+        return cur_taint, original_o
+    return None, o
+

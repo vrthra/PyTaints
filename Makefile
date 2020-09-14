@@ -14,4 +14,4 @@ tested.a:
 	echo '(1+2)' > tested.a
 
 clean:
-	rm -f a tcalculator.py
+	rm -f tested.a tcalculator.py
