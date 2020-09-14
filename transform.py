@@ -232,6 +232,7 @@ def rewrite(src):
 from taints import T_method__, T_scope__
 from taints import T_, O, Tx
 from taints import taint_wrap__
+from taints import TaintPolicy
 """
     source = astor.to_source(v)
     footer = """\
@@ -241,7 +242,7 @@ if __name__ == "__main__":
     for arg in sys.argv[1:]:
         with open(arg) as f:
             mystring = f.read().strip().replace('\\n', ' ')
-        main(Tx(mystring, 'HIGH'))
+        main(Tx(mystring, TaintPolicy(1)))
 """
     return "%s\n%s\n%s" % (header, source, footer)
 

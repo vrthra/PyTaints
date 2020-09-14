@@ -24,23 +24,23 @@ class TaintedObject:
             taint_start, start = unwrap(tainted_start)
             taint_stop, stop = unwrap(tainted_stop)
             taint_step, step = unwrap(tainted_stop)
-            return TaintedObject(self.o[slice(start, stop, step)], taint_policy_a([taint_start, taint_stop, taint_step, self.taint]))
+            return TaintedObject(self.o[slice(start, stop, step)], TaintPolicy(taint_start, taint_stop, taint_step, self.taint))
 
         else:
             taint, key = unwrap(tainted_key)
-            return TaintedObject(self.o[key], taint_policy(taint, self.taint))
+            return TaintedObject(self.o[key], TaintPolicy(taint, self.taint))
 
     def in_(self, val):
         if isinstance(val, TaintedObject):
             taint, val = unwrap(val)
-            return TaintedObject(val, taint_policy(taint, self.taint))
+            return TaintedObject(val, TaintPolicy(taint, self.taint))
         return TaintedObject(val, self.taint)
 
 
     def __add__(self, other):
         t, o = unwrap(self.o)
         tt, ot = unwrap(other)
-        return TaintedObject((o + ot), taint_policy(t, tt))
+        return TaintedObject((o + ot), TaintPolicy(t, tt))
 
     def __repr__(self):
         t, o = unwrap(self.o)
@@ -89,20 +89,10 @@ class Taint:
         if val is None: return val
         val_taint = val.taint if hasattr(val, 'taint') else None
         bg_taint = self.t()[1]
-        cur_taint = taint_policy(val_taint, bg_taint)
+        cur_taint = TaintPolicy(val_taint, bg_taint)
         return TaintedObject(val, cur_taint)
 
 TAINTS = Taint()
-def taint_policy(taint_a, taint_b):
-    if taint_a is None: return taint_b
-    if taint_b is None: return taint_a
-    return taint_a
-
-def taint_policy_a(taints):
-    s = [t for t in taints if t is not None]
-    if s:
-        return s[0]
-    return None
 
 import traceback
 class T_method:
@@ -171,7 +161,22 @@ def Tx(val, taint):
 def unwrap(o):
     if isinstance(o, TaintedObject):
         computed_taint, original_o = unwrap(o.o)
-        cur_taint = taint_policy(o.taint, computed_taint)
+        cur_taint = TaintPolicy(o.taint, computed_taint)
         return cur_taint, original_o
     return None, o
 
+class TaintPolicy:
+    def __init__(self, *taint):
+        val = [t for t in taint if t is not None]
+        self.taint = sum(val)
+
+    def __add__(self, other):
+        if other is None: return self
+        return self
+
+    def __radd__(self, other):
+        if other is None: return self
+        return self
+
+    def __repr__(self):
+        return 't[%s]' % repr(self.taint)
