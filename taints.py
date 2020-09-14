@@ -4,6 +4,9 @@ class in_wrap:
     def in_(self, s): return self.s in s
 
 def taint_wrap__(st):
+    if isinstance(st, TaintedObject):
+        t, st_ = unwrap(st)
+        if isinstance(st_, str): return in_wrap(st_)
     if isinstance(st, str): return in_wrap(st)
     return st
 
@@ -24,6 +27,12 @@ class TaintedObject:
         else:
             taint, key = unwrap(tainted_key)
             return TaintedObject(self.o[key], TaintPolicy(taint, self.taint))
+
+    def __eq__(self, other):
+        t, o = unwrap(self.o)
+        tt, ot = unwrap(other)
+        return TaintedObject((o == ot), TaintPolicy(t, tt))
+
 
     def in_(self, val):
         if isinstance(val, TaintedObject):
