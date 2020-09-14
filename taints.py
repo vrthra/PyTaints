@@ -167,8 +167,8 @@ def unwrap(o):
 
 class TaintPolicy:
     def __init__(self, *taint):
-        val = [t for t in taint if t is not None]
-        self.taint = sum(val)
+        val = [t.taint if isinstance(t, TaintPolicy) else t for t in taint if t is not None]
+        self.taint = any(val)
 
     def __add__(self, other):
         if other is None: return self
