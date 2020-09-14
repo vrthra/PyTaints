@@ -103,7 +103,6 @@ class T_method:
         TAINTS.p_(p)
         TAINTS.pop()
          # indicate to `O` that we do not need taint tramsmission
-        METHODS.append(0)
 
 
 T_method__ = T_method
@@ -137,26 +136,23 @@ def taint_expr__(expr, taint):
 T_ = taint_expr__
 
 
-def O(fn, bg_taint):
+def O(fn, bg_taint, m_name):
     if not isinstance(fn, type(lambda: 1)): return fn
     def proxy(*args, **kwargs):
-        # Check if T_method is in operation, if it is not, then
         # check if any of the args and kwargs are tainted. If it is,
         # taint the returned value (v)
         # also, if any arguments are tainted containers, extract the
         # original object before passing it.
-        l_methods = len(METHODS)
-        v = fn(*args, **kwargs)
-        l1_methods = len(METHODS)
-        if l1_methods > l_methods:
-            m = METHODS.pop()
-            assert not m
-            return v
-        else:
+        if m_name not in TAINTED_METHODS: # an external method.
             # an external method. So, we overapproximate. That is, there is
             # a taint in the result if either background or arguments have tains.
             tp = TaintPolicy([a.taint for a in args + kwargs if isinstance(a, TaintedObject)] + [bg_taint.t()[1]])
+            args_ = [unwrap(a) if isinstance(a, TaintedObject) else a for a in args]
+            kwargs_ = [unwrap(a) if isinstance(a, TaintedObject) else a for a in kwargs]
+            v = fn(*args_, **kwargs_)
             return TaintedObject(v, tp)
+        else: # registered method, it knows how to handle taints.
+            return fn(*args, **kwargs)
     return proxy
 
 def Tx(val):
@@ -184,3 +180,7 @@ class TaintPolicy:
 
     def __repr__(self):
         return 't[%s]' % repr(self.taint)
+
+TAINTED_METHODS = {}
+def hook_method(m):
+    TAINTED_METHODS[m] = True

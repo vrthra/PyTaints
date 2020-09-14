@@ -17,7 +17,16 @@ class TaintRewriter(ast.NodeTransformer):
         return ast.Call(func=ast.Name(id=TaintName, ctx=ast.Load()), args=[node], keywords=[])
 
     def O(self, node):
-        return ast.Call(func=ast.Name(id=TaintFunc, ctx=ast.Load()), args=[node, ast.Name(id=TaintName, ctx=ast.Load())], keywords=[])
+        if isinstance(node, ast.Attribute):
+            name = "%s.%s" % (node.attr, node.value.id)
+        elif isinstance(node, ast.Name):
+            name = node.id
+        else:
+            assert False
+        return ast.Call(func=ast.Name(id=TaintFunc, ctx=ast.Load()), args=[
+            node, ast.Name(id=TaintName, ctx=ast.Load()),
+            ast.Str(name)
+            ], keywords=[])
 
 
 
@@ -229,12 +238,17 @@ class TaintRewriter(ast.NodeTransformer):
 def rewrite(src):
     v = ast.fix_missing_locations(TaintRewriter().visit(ast.parse(src)))
     header = """\
+import taints
 from taints import T_method__, T_scope__
 from taints import T_, O, Tx
 from taints import taint_wrap__
 """
     source = astor.to_source(v)
+    methods_s = ',\n'.join([repr(s) for s in methods])
     footer = """\
+for method in [%s]:
+    taints.hook_method(method)
+
 if __name__ == "__main__":
     import sys
     js = []
@@ -243,7 +257,7 @@ if __name__ == "__main__":
             mystring = f.read().strip().replace('\\n', ' ')
         v = main(Tx(mystring))
         print(v)
-"""
+""" % methods_s
     return "%s\n%s\n%s" % (header, source, footer)
 
 def read_it(fn):
