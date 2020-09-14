@@ -17,7 +17,7 @@ class TaintRewriter(ast.NodeTransformer):
         return ast.Call(func=ast.Name(id=TaintName, ctx=ast.Load()), args=[node], keywords=[])
 
     def O(self, node):
-        return ast.Call(func=ast.Name(id=TaintFunc, ctx=ast.Load()), args=[node], keywords=[])
+        return ast.Call(func=ast.Name(id=TaintFunc, ctx=ast.Load()), args=[node, ast.Name(id=TaintName, ctx=ast.Load())], keywords=[])
 
 
 

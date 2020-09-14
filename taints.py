@@ -137,7 +137,7 @@ def taint_expr__(expr, taint):
 T_ = taint_expr__
 
 
-def O(fn):
+def O(fn, bg_taint):
     if not isinstance(fn, type(lambda: 1)): return fn
     def proxy(*args, **kwargs):
         # Check if T_method is in operation, if it is not, then
@@ -153,7 +153,9 @@ def O(fn):
             assert not m
             return v
         else:
-            tp = TaintPolicy([a.taint for a in args + kwargs if isinstance(a, TaintedObject)])
+            # an external method. So, we overapproximate. That is, there is
+            # a taint in the result if either background or arguments have tains.
+            tp = TaintPolicy([a.taint for a in args + kwargs if isinstance(a, TaintedObject)] + [bg_taint.t()[1]])
             return TaintedObject(v, tp)
     return proxy
 
