@@ -144,8 +144,8 @@ def O(fn):
         return v
     return proxy
 
-def Tx(val, taint):
-    return TaintedObject(val, taint)
+def Tx(val):
+    return TaintedObject(val, TaintPolicy(1))
 
 def unwrap(o):
     if isinstance(o, TaintedObject):
