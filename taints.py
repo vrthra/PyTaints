@@ -34,11 +34,18 @@ class Taint:
         #print(' ' * len(self.TAINTS), self.t(), repr(p), repr(val), 'taint:',hasattr(val, 'taint'), 'bgtaint:', t.t())
 
     def __call__(self, val):
+        # Always produce a new object.
+        # TODO: this should simple be a single type custom object that is a
+        # container for all kinds of tainted values. It should define
+        # all dunder methods which extract values and pass on the
+        # resulting taints just like proxy.
+
         if val is None: return val
         val_taint = val.taint if hasattr(val, 'taint') else None
         bg_taint = self.t()[1]
         cur_taint = taint_policy(val_taint, bg_taint)
         if hasattr(val, 'taint'):
+            # TODO: Ensure that this is a new object
             val.taint = cur_taint
             return val
         if isinstance(val, int): return w.tint(val, cur_taint)
@@ -106,3 +113,14 @@ def taint_expr__(expr, taint):
     return expr
 
 T_ = taint_expr__
+
+def O(fn):
+    def proxy(*args, **kwargs):
+        # TODO: Check if T_method is in operation, if it is not, then
+        # check if any of the args and kwargs are tainted. If it is,
+        # taint the returned value (v)
+        # also, if any arguments are tainted containers, extract the
+        # original object before passing it.
+        v = fn(*args, **kwargs)
+        return v
+    return proxy

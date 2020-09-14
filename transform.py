@@ -5,6 +5,7 @@ methods = []
 Epsilon = '-'
 NoEpsilon = '='
 TaintName = 'T'
+TaintFunc = 'O'
 TaintAssign = 'T'
 TaintWrap = 'taint_wrap__'
 TaintExpr = 'T_'
@@ -14,6 +15,11 @@ TaintedScope = 'T_scope__'
 class TaintRewriter(ast.NodeTransformer):
     def I(self, node):
         return ast.Call(func=ast.Name(id=TaintName, ctx=ast.Load()), args=[node], keywords=[])
+
+    def O(self, node):
+        return ast.Call(func=ast.Name(id=TaintFunc, ctx=ast.Load()), args=[node], keywords=[])
+
+
 
     def init_counters(self):
         self.if_counter = 0
@@ -72,7 +78,7 @@ class TaintRewriter(ast.NodeTransformer):
     def visit_Call(self, tree_node):
         #self.generic_visit(tree_node)
         # call has to be handled differently.
-        #tree_node.func = self.I(tree_node.func)
+        tree_node.func = self.O(tree_node.func)
         my_args = []
         for arg in tree_node.args:
             a = self.generic_visit(ast.Module(arg))
@@ -180,6 +186,12 @@ class TaintRewriter(ast.NodeTransformer):
             n = self.generic_visit(ast.Module(node))
             body.append(n.body)
         tree_node.body = body
+        else_body = []
+        for node in tree_node.orelse:
+            n = self.generic_visit(ast.Module(node))
+            else_body.append(n.body)
+        tree_node.orelse = else_body
+
         tree_node.test = self.wrap_expr_in_call(TaintExpr, tree_node.test, [ ast.Name(id=TaintName)])
         return self.wrap_in_outer('if', counter, tree_node)
 
@@ -213,7 +225,7 @@ def rewrite(src):
     header = """\
 import taintwrappers as wrapper
 from taints import T_method__, T_scope__
-from taints import T_
+from taints import T_, O
 """
     source = astor.to_source(v)
     footer = """\
