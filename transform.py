@@ -1,5 +1,4 @@
 import ast
-import astor
 
 methods = []
 Epsilon = '-'
@@ -243,7 +242,7 @@ from taints import T_method__, T_scope__
 from taints import T_, O, Tx
 from taints import taint_wrap__
 """
-    source = astor.to_source(v)
+    source = ast.dump(v, indent=4)
     methods_s = ',\n'.join([repr(s) for s in methods])
     footer = """\
 for method in [%s]:
